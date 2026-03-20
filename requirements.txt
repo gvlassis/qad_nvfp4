@@ -1,0 +1,4 @@
+transformers
+lm_eval
+datasets
+nvidia-modelopt
