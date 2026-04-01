@@ -4,9 +4,10 @@ from itertools import chain
 from transformers import AutoTokenizer
 from datasets import load_dataset
 
-from torch import inference_mode, tensor, int64, AdamW
+from torch import inference_mode, tensor, int64
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
+from torch.optim import AdamW
 
 from lm_eval.models.huggingface import HFLM
 from lm_eval import simple_evaluate
@@ -147,6 +148,34 @@ def get_dataloader(tokenizer, dataset, context_size=1024, batch_size=32):
 
 
 def quantize(tokenizer, model, dataset, context_size=1024, batches=128, batch_size=32):
+    dataloader = get_dataloader(tokenizer, dataset, context_size, batch_size)
+    device = get_model_device(model)
+    
+    @inference_mode()
+    def forward_loop(model):
+        for batch_idx, batch in zip(range(batches), dataloader):  
+            model(batch["input_ids"].to(device))
+
+    model = mtq.quantize(model, mtq.NVFP4_DEFAULT_CFG, forward_loop)
+
+    return model
+
+
+def kl_div(input_logits, target_logits, temperature=1):
+    smooth_input_logits = input_logits / temperature
+    smooth_input_log_probs = smooth_input_logits.log_softmax(dim=-1)
+    
+    smooth_target_logits = target_logits / temperature
+    smooth_target_log_probs = smooth_target_logits.log_softmax(dim=-1)
+    
+    loss = F.kl_div(smooth_input_log_probs, smooth_target_log_probs, reduction="batchmean", log_target=True)
+    
+    scaled_loss = loss * temperature**2
+    
+    return scaled_loss
+
+
+def distil(tokenizer, teacher, student, dataset, context_size=1024, batches=1000, batch_size=32, temperature=1):
     dataloader = get_dataloader(tokenizer, dataset, context_size, batch_size)
     device = get_model_device(teacher)
 
