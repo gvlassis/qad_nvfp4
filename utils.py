@@ -32,6 +32,38 @@ def load_tokenizer(model):
     return tokenizer
 
 
+def print_model_info(model):
+    print(f"num_parameters: {model.num_parameters()/1e9:.2f}B")
+    print(f"dtype: {str(model.dtype).removeprefix('torch.')}")
+    print(f"max_position_embeddings: {model.config.max_position_embeddings}")
+    print(f"vocab_size: {model.config.vocab_size}")
+    print(f"hidden_size: {model.config.hidden_size}")
+    print(f"num_hidden_layers: {model.config.num_hidden_layers}")
+
+
+def print_vram_estimate(model, context_size, batch_size, activations_per_block=10):
+    print("\x1b[33m[WARNING] The numbers below are just an estimate, calculated a priori.\x1b[0m")
+    
+    model_vram = model.num_parameters()*model.dtype.itemsize
+    print(f"model_vram: {model_vram/2**30:.2f}GiB")
+    
+    logits_vram = batch_size*context_size*model.config.vocab_size*model.dtype.itemsize
+    print(f"logits_vram: {logits_vram/2**30:.2f}GiB")
+    
+    activations_vram = batch_size*context_size*model.config.hidden_size*model.config.num_hidden_layers*activations_per_block*model.dtype.itemsize
+    print(f"activations_vram: {activations_vram/2**30:.2f}GiB")
+
+    grads_vram = model_vram
+    print(f"grads_vram: {grads_vram/2**30:.2f}GiB")
+
+    # Adam has two float32 optimizer states
+    opt_state_vram = 2*model.num_parameters()*4
+    print(f"opt_state_vram: {opt_state_vram/2**30:.2f}GiB")
+
+    total_vram = model_vram + logits_vram + activations_vram + grads_vram + opt_state_vram
+    print(f"total_vram: {total_vram/2**30:.2f}GiB")
+
+
 def get_model_device(model):
     device = next(model.parameters()).device
 

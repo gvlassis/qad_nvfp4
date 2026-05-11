@@ -1,12 +1,12 @@
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from transformers import AutoModelForCausalLM
-from utils import DEFAULT_EVAL_TASKS, load_tokenizer, evaluate, quantize, distil
+from utils import DEFAULT_EVAL_TASKS, load_tokenizer, print_model_info, print_vram_estimate, evaluate, quantize, distil
 
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 
 parser.add_argument("--model", help="Model to apply QAD on. Used both as the teacher and the student.", default="Qwen/Qwen2.5-0.5B")
-parser.add_argument("--context_size", help="Overrides model sequence length (calibration+distillation)", type=int, default=1024)
+parser.add_argument("--context_size", help="Sequence length for calibration and distillation", type=int, default=1024)
 
 parser.add_argument("--eval_tasks", help="Tasks to evaluate unquantized teacher and quantized student after PTQ and after QAD", nargs="+", default=DEFAULT_EVAL_TASKS)
 parser.add_argument("--eval_limit", help="Total samples used for every evaluation task", type=int, default=100)
@@ -32,6 +32,8 @@ device = f"{device_type}:{args.device_index}"
 tokenizer = load_tokenizer(args.model)
 
 teacher = AutoModelForCausalLM.from_pretrained(args.model)
+print_model_info(teacher)
+print_vram_estimate(teacher, args.context_size, args.qad_batch_size)
 teacher = teacher.to(device)
 
 evaluate(tokenizer, teacher, args.eval_tasks, args.eval_limit)
